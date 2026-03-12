@@ -54,13 +54,15 @@ class TestFlaskApp:
     def test_predict_endpoint_post(self, client):
         """Test POST /predict endpoint."""
         payload = {"text": "This movie is great!", "model_kind": "v0"}
-        response = client.post(
-            "/predict",
-            data=json.dumps(payload),
-            content_type="application/json",
-        )
-        # Without actual models loaded, this may error gracefully
-        assert response.status_code in [200, 400, 500]
+        with patch("v2.server.predict") as mock_predict:
+            mock_predict.return_value = {"label": 1, "prob_pos": 0.8}
+            response = client.post(
+                "/predict",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
+            # With mocked predict function, should return 200
+            assert response.status_code == 200
 
     def test_predict_endpoint_missing_text(self, client):
         """Test /predict endpoint with missing text field."""
@@ -132,29 +134,35 @@ class TestServerIntegration:
 
     def test_predict_v0_with_mock_model(self, client_with_models):
         """Test v0 prediction through API with mocked model."""
-        payload = {"text": "This is a great movie!", "model_kind": "v0"}
-        response = client_with_models.post(
-            "/predict",
-            data=json.dumps(payload),
-            content_type="application/json",
-        )
+        with patch("v2.server.predict") as mock_predict:
+            mock_predict.return_value = {"label": 1, "prob_pos": 0.8}
+            payload = {"text": "This is a great movie!", "model_kind": "v0"}
+            response = client_with_models.post(
+                "/predict",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
 
-        if response.status_code == 200:
+            assert response.status_code == 200
             data = json.loads(response.data)
-            assert "label" in data or "error" in data
+            assert "label" in data
+            assert data["label"] == 1
 
     def test_predict_v1_with_mock_model(self, client_with_models):
         """Test v1 prediction through API with mocked model."""
-        payload = {"text": "This is a bad movie.", "model_kind": "v1"}
-        response = client_with_models.post(
-            "/predict",
-            data=json.dumps(payload),
-            content_type="application/json",
-        )
+        with patch("v2.server.predict") as mock_predict:
+            mock_predict.return_value = {"label": 0, "prob_pos": 0.3}
+            payload = {"text": "This is a bad movie.", "model_kind": "v1"}
+            response = client_with_models.post(
+                "/predict",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
 
-        if response.status_code == 200:
+            assert response.status_code == 200
             data = json.loads(response.data)
-            assert "label" in data or "error" in data
+            assert "label" in data
+            assert data["label"] == 0
 
     def test_predict_empty_text(self, client_with_models):
         """Test prediction with empty text."""
@@ -170,13 +178,15 @@ class TestServerIntegration:
 
     def test_predict_long_text(self, client_with_models):
         """Test prediction with very long text."""
-        long_text = "word " * 10000  # Very long input
-        payload = {"text": long_text, "model_kind": "v0"}
-        response = client_with_models.post(
-            "/predict",
-            data=json.dumps(payload),
-            content_type="application/json",
-        )
+        with patch("v2.server.predict") as mock_predict:
+            mock_predict.return_value = {"label": 1, "prob_pos": 0.7}
+            long_text = "word " * 10000  # Very long input
+            payload = {"text": long_text, "model_kind": "v0"}
+            response = client_with_models.post(
+                "/predict",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
 
-        # Should handle gracefully without crashing
-        assert response.status_code in [200, 400, 413, 500]
+            # Should handle gracefully with mocked predict
+            assert response.status_code == 200

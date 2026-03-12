@@ -53,7 +53,7 @@ class TestCLIArgParsing:
         mock_load_v1.return_value = {"bundle": {}}
 
         # Mock app.run() to prevent actual server start
-        with patch("v2.cli.create_app") as mock_create_app:
+        with patch("v2.server.create_app") as mock_create_app:
             mock_app = Mock()
             mock_app.run = Mock()
             mock_create_app.return_value = mock_app
@@ -115,12 +115,9 @@ class TestCLIValidation:
         mock_load_v0.return_value = {"model": Mock()}
         mock_load_v1.return_value = {"bundle": {}}
 
-        with patch("v2.cli.predict", side_effect=ValueError("model must be one of: v0, v1")):
-            try:
-                main()
-            except ValueError as e:
-                # Expected to raise ValueError
-                assert "model must be one of" in str(e)
+        # argparse will raise SystemExit when invalid choice is provided
+        with pytest.raises(SystemExit):
+            main()
 
     @patch("sys.argv", ["v2", "predict", "--text", "", "--model", "v0"])
     @patch("v2.cli.load_v0_model")
@@ -131,7 +128,7 @@ class TestCLIValidation:
 
         # Empty text may be processed by the model or rejected
         with patch("v2.cli.predict") as mock_predict:
-            mock_predict.return_value = {"label": 0}
+            mock_predict.return_value = {"label": 0, "prob_pos": 0.5}
             try:
                 main()
             except (SystemExit, ValueError):

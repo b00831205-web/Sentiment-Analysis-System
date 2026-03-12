@@ -38,8 +38,33 @@ def setup_logging(log_dir: str | None = None, level: str = "INFO") -> None:
     log_path = Path(log_dir) / "v2.log"
 
     fmt = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    handlers = [
-        logging.StreamHandler(),
-        logging.FileHandler(log_path, encoding="utf-8"),
-    ]
-    logging.basicConfig(level=lvl, format=fmt, handlers=handlers)
+    
+    # Get the root logger and clear existing handlers
+    root_logger = logging.getLogger()
+    
+    # Close and remove all existing handlers
+    for handler in root_logger.handlers[:]:
+        try:
+            handler.close()
+        except Exception:
+            pass
+        root_logger.removeHandler(handler)
+    
+    # Set root logger level
+    root_logger.setLevel(lvl)
+    
+    # Add handlers
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(lvl)
+    
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(lvl)
+    
+    # Set formatter
+    formatter = logging.Formatter(fmt)
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    
+    # Add handlers to root logger
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
