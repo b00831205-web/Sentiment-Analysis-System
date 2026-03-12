@@ -1,7 +1,7 @@
 # Multi-stage build for v2 sentiment analysis system
 
 # Stage 1: Base Python image for building dependencies
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
