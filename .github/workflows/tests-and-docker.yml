@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: sentiment-analysis-system
+  IMAGE_NAME: b00831205-web/sentiment-analysis-system
 
 jobs:
   test:
