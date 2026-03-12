@@ -21,10 +21,11 @@ if str(PROJECT_ROOT) not in sys.path:
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 from sklearn.model_selection import StratifiedKFold
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from v0.data import ensure_aclImdb
 
@@ -233,14 +234,14 @@ def train_epochs(model, X_train, y_train, X_eval, y_eval, epochs, batch_size, se
         seed: Random seed controlling mini-batch shuffling.
 
     Returns:
-        A tuple: (train_losses, eval_losses, eval_accs, best_state) where:
+        A tuple: (train_losses, eval_losses, eval_metrics) where:
         - train_losses: list of per-epoch training loss values
         - eval_losses: list of per-epoch evaluation loss values
-        - eval_accs: list of per-epoch evaluation accuracy values
-        - best_state: dict with best epoch and parameter snapshot
+        - eval_metrics: list of per-epoch evaluation metrics (dict with accuracy, precision, recall, f1, confusion_matrix)
     """
 
-    train_losses, eval_losses, eval_accs = [], [], []
+    train_losses, eval_losses = [], []
+    eval_metrics = []
     best_state = {"epoch": 0, "eval_acc": -1.0, "W1": None, "b1": None, "W2": None, "b2": None}
 
     for epoch in range(1, epochs + 1):
@@ -266,13 +267,26 @@ def train_epochs(model, X_train, y_train, X_eval, y_eval, epochs, batch_size, se
         yp2 = np.clip(y_eval_prob, eps, 1 - eps)
         eval_loss = float(-(y_eval * np.log(yp2) + (1 - y_eval) * np.log(1 - yp2)).mean())
         eval_pred = (y_eval_prob >= 0.5).astype(np.int32).reshape(-1)
-        eval_acc = accuracy_score(y_eval.reshape(-1), eval_pred)
+        y_eval_flat = y_eval.reshape(-1).astype(np.int32)
+        
+        
+        eval_acc = accuracy_score(y_eval_flat, eval_pred)
+        eval_precision = precision_score(y_eval_flat, eval_pred, zero_division=0)
+        eval_recall = recall_score(y_eval_flat, eval_pred, zero_division=0)
+        eval_f1 = f1_score(y_eval_flat, eval_pred, zero_division=0)
+        eval_cm = confusion_matrix(y_eval_flat, eval_pred)
 
         train_losses.append(train_loss)
         eval_losses.append(eval_loss)
-        eval_accs.append(float(eval_acc))
+        eval_metrics.append({
+            "accuracy": float(eval_acc),
+            "precision": float(eval_precision),
+            "recall": float(eval_recall),
+            "f1": float(eval_f1),
+            "confusion_matrix": eval_cm.tolist(),
+        })
 
-        print(f"Epoch {epoch:03d}/{epochs} | loss={train_loss:.4f} | eval_acc={eval_acc:.4f}")
+        print(f"Epoch {epoch:03d}/{epochs} | loss={train_loss:.4f} | acc={eval_acc:.4f} | prec={eval_precision:.4f} | rec={eval_recall:.4f} | f1={eval_f1:.4f}")
 
         if eval_acc > best_state["eval_acc"]:
             best_state = {
@@ -284,7 +298,7 @@ def train_epochs(model, X_train, y_train, X_eval, y_eval, epochs, batch_size, se
                 "b2": model.b2.copy(),
             }
 
-    return train_losses, eval_losses, eval_accs, best_state
+    return train_losses, eval_losses, eval_metrics, best_state
 
 
 def main():
@@ -355,21 +369,22 @@ def main():
             seed=args.seed + fold,
         )
 
-        tr_losses, va_losses, va_accs, _ = train_epochs(
+        tr_losses, va_losses, va_metrics, _ = train_epochs(
             model, X_tr, y_tr, X_va, y_va,
             epochs=args.epochs, batch_size=args.batch, seed=args.seed + 1000 * fold
         )
 
         fold_train_losses.append(tr_losses)
-        fold_val_accs.append(va_accs)
+        fold_val_accs.append([m["accuracy"] for m in va_metrics])
 
         fold_summary.append({
             "fold": fold,
-            "val_acc_last": float(va_accs[-1]),
-            "val_acc_best": float(np.max(va_accs)),
+            "val_acc_last": va_metrics[-1]["accuracy"],
+            "val_acc_best": max([m["accuracy"] for m in va_metrics]),
+            "val_recall_best": max([m["recall"] for m in va_metrics]),
         })
 
-        print(f"Fold {fold} | val_acc_best={np.max(va_accs):.4f} | val_acc_last={va_accs[-1]:.4f}")
+        print(f"Fold {fold} | val_acc_best={max([m['accuracy'] for m in va_metrics]):.4f} | val_rec_best={max([m['recall'] for m in va_metrics]):.4f}")
 
     best_vals = [f["val_acc_best"] for f in fold_summary]
     cv_mean = float(np.mean(best_vals))
@@ -385,7 +400,7 @@ def main():
         seed=args.seed,
     )
 
-    final_train_losses, final_test_losses, final_test_accs, final_best = train_epochs(
+    final_train_losses, final_test_losses, final_test_metrics, final_best = train_epochs(
         final_model, X_train, y_train, X_test, y_test,
         epochs=args.epochs, batch_size=args.batch, seed=args.seed
     )
@@ -394,7 +409,15 @@ def main():
     final_model.b1 = final_best["b1"]
     final_model.W2 = final_best["W2"]
     final_model.b2 = final_best["b2"]
-    print(f"Final(best) at epoch={final_best['epoch']} | test_acc={final_best['eval_acc']:.4f}")
+    
+    # Report final test metrics at the best epoch
+    best_test_metrics = final_test_metrics[final_best["epoch"] - 1]
+    print(f"Final(best) at epoch={final_best['epoch']}")
+    print(f"  Test Accuracy:  {best_test_metrics['accuracy']:.4f}")
+    print(f"  Test Precision: {best_test_metrics['precision']:.4f}")
+    print(f"  Test Recall:    {best_test_metrics['recall']:.4f}")
+    print(f"  Test F1-Score:  {best_test_metrics['f1']:.4f}")
+    print(f"  Confusion Matrix:\n{best_test_metrics['confusion_matrix']}")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_json = Path(__file__).with_name(f"nn_cv_curve_{ts}.json")
@@ -403,8 +426,11 @@ def main():
 
     cv_train_mean = list(np.mean(np.array(fold_train_losses), axis=0))
     cv_val_acc_mean = list(np.mean(np.array(fold_val_accs), axis=0))
-    test_acc_last = float(final_test_accs[-1])
-    test_acc_best = float(np.max(final_test_accs))
+    test_acc_last = final_test_metrics[-1]["accuracy"]
+    test_acc_best = max([m["accuracy"] for m in final_test_metrics])
+    test_rec_best = max([m["recall"] for m in final_test_metrics])
+    test_prec_best = max([m["precision"] for m in final_test_metrics])
+    test_f1_best = max([m["f1"] for m in final_test_metrics])
 
     payload = {
         "timestamp": ts,
@@ -423,9 +449,26 @@ def main():
         "final": {
             "train_loss": [float(x) for x in final_train_losses],
             "test_loss": [float(x) for x in final_test_losses],
-            "test_acc": [float(x) for x in final_test_accs],
-            "test_acc_best": test_acc_best,
-            "test_acc_last": test_acc_last,
+            "test_accuracy": [m["accuracy"] for m in final_test_metrics],
+            "test_precision": [m["precision"] for m in final_test_metrics],
+            "test_recall": [m["recall"] for m in final_test_metrics],
+            "test_f1": [m["f1"] for m in final_test_metrics],
+            "test_confusion_matrix": best_test_metrics["confusion_matrix"],
+            "test_metrics_best": {
+                "epoch": final_best["epoch"],
+                "accuracy": test_acc_best,
+                "precision": test_prec_best,
+                "recall": test_rec_best,
+                "f1": test_f1_best,
+                "confusion_matrix": best_test_metrics["confusion_matrix"],
+            },
+            "test_metrics_last": {
+                "accuracy": test_acc_last,
+                "precision": final_test_metrics[-1]["precision"],
+                "recall": final_test_metrics[-1]["recall"],
+                "f1": final_test_metrics[-1]["f1"],
+                "confusion_matrix": final_test_metrics[-1]["confusion_matrix"],
+            },
         },
     }
     out_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -440,7 +483,8 @@ def main():
     ax1.grid(True, alpha=0.3)
 
     ax2 = ax1.twinx()
-    ax2.plot(epochs, final_test_accs, color="tab:orange", label="Final Test Acc")
+    test_accs = [m["accuracy"] for m in final_test_metrics]
+    ax2.plot(epochs, test_accs, color="tab:orange", label="Final Test Acc")
     ax2.set_ylabel("Accuracy")
 
     h1, l1 = ax1.get_legend_handles_labels()
@@ -455,6 +499,25 @@ def main():
     else:
         plt.close(fig)
     print(f"Saved learning curve figure to: {out_png}")
+
+    # Plot confusion matrix for the best epoch
+    out_cm_png = Path(__file__).with_name(f"confusion_matrix_{ts}.png")
+    cm = np.array(best_test_metrics["confusion_matrix"])
+    fig, ax = plt.subplots(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+                xticklabels=["Negative", "Positive"],
+                yticklabels=["Negative", "Positive"],
+                ax=ax, cbar_kws={"label": "Count"})
+    ax.set_xlabel("Predicted Label")
+    ax.set_ylabel("True Label")
+    ax.set_title(f"Confusion Matrix (Epoch {final_best['epoch']})")
+    plt.tight_layout()
+    plt.savefig(out_cm_png, dpi=150)
+    if not args.no_show:
+        plt.show()
+    else:
+        plt.close(fig)
+    print(f"Saved confusion matrix to: {out_cm_png}")
 
 
     joblib.dump(
