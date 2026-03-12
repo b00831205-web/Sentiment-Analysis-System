@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# Project specific
+logs/
+*.joblib
+aclImdb/
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.tox/
+
+# Documentation
+docs/_build/
+
+# OS
+*.log
+*.pot

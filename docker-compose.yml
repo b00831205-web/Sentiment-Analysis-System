@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  sentiment-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentiment-api-v2
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=8000
+    volumes:
+      # Mount artifacts for model loading (if available locally)
+      - ./v0:/app/v0:ro
+      - ./v1:/app/v1:ro
+      # Mount logs for inspection
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+    depends_on: []
+
+networks:
+  sentiment-network:
+    driver: bridge
