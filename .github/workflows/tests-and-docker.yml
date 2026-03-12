@@ -15,6 +15,8 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         python-version: ['3.11']
@@ -54,6 +56,8 @@ jobs:
   lint:
     name: Code Quality Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - name: Checkout code
@@ -140,6 +144,8 @@ jobs:
   docker-test:
     name: Test Docker Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: test
     
     steps:
@@ -192,6 +198,8 @@ jobs:
   summary:
     name: Build Summary
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [test, lint, docker-test]
     if: always()
     
