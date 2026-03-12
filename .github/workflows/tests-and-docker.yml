@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/sentiment-api
+  IMAGE_NAME: sentiment-analysis-system
 
 jobs:
   test:
@@ -118,6 +118,8 @@ jobs:
       uses: docker/metadata-action@v4
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        flavor: |
+          latest=auto
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
